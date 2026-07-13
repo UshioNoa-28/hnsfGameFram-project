@@ -1,0 +1,9 @@
+paopao=com.tedu.element.PaoPao
+player=com.tedu.element.Player
+enemy=com.tedu.element.Enemy
+ground=com.tedu.element.Platform
+platform=com.tedu.element.Platform
+barrier=com.tedu.element.Barrier
+item=com.tedu.element.ItemDrop
+background=com.tedu.element.Background
+boss=com.tedu.element.Boss
