@@ -12,18 +12,22 @@ import com.tedu.manager.GameElement;
 import com.tedu.manager.GameLoad;
 import com.tedu.manager.SoundManager;
 import com.tedu.controller.GameThread;
+import com.tedu.show.GameMainJPanel;
 
 /**
  * 玩家角色 — 两层精灵组合: 底层=腿脚(stand/run/jump_leg/squat), 上层=身体(attack/knife/jump_body)
  */
 public class Player extends ElementObj {
 
-	private boolean left, right, jump, crouch, shoot, melee;
+	private boolean left, right, jump, crouch, shoot, melee, throwGrenade, aimUp;
 	private boolean onGround = true;
-	private int shootCooldown, hurtCooldown, meleeTimer;
+	private int shootCooldown, hurtCooldown, meleeTimer, grenadeCooldown;
+	private int ammo = -1, grenades = 5;
 	private int facing = 1;
-	private static int savedScore, savedLives = 3, savedHp = 8, savedLevel = 1;
+	private static final int DEFAULT_MAX_HP = 20;
+	private static int savedScore, savedLives = 3, savedHp = DEFAULT_MAX_HP, savedLevel = 1;
 	private static String savedWeapon = "NORMAL";
+	private static int savedAmmo = -1, savedGrenades = 5;
 
 	// 两层动画状态
 	private String legAnim = "stand", bodyAnim = "";
@@ -38,12 +42,13 @@ public class Player extends ElementObj {
 	public Player() {
 		int level = GameThread.getCurrentLevel();
 		if (level <= 1 || level < savedLevel) {
-			savedScore = 0; savedLives = 3; savedHp = 8; savedWeapon = "NORMAL";
+			savedScore = 0; savedLives = 3; savedHp = DEFAULT_MAX_HP; savedWeapon = "NORMAL"; savedAmmo = -1; savedGrenades = 5;
 		}
 		savedLevel = level;
-		setHp(savedHp); setMaxHp(8);
+		setMaxHp(DEFAULT_MAX_HP); setHp(Math.min(savedHp, getMaxHp()));
 		setLives(savedLives); setScore(savedScore);
 		setWeaponName(savedWeapon);
+		ammo = savedAmmo; grenades = savedGrenades;
 		setW(52); setH(54);
 	}
 
@@ -65,13 +70,6 @@ public class Player extends ElementObj {
 		int bodyLeftOff = onGround ? 50 : 5;
 		drawLayerAt(g, overFrames, bodyFrame, legTop + 6, 5, bodyLeftOff);
 
-		// 头顶血条
-		int drawW = getW(), drawH = getH();
-		int hpW = Math.max(1, drawW * Math.max(0, getHp()) / Math.max(1, getMaxHp()));
-		g.setColor(java.awt.Color.RED);
-		g.fillRect(getX(), getY() - 7, drawW, 3);
-		g.setColor(java.awt.Color.GREEN);
-		g.fillRect(getX(), getY() - 7, hpW, 3);
 	}
 
 	/**
@@ -150,14 +148,19 @@ public class Player extends ElementObj {
 				left = bl; if (bl) facing = -1; break;
 			case KeyEvent.VK_D: case KeyEvent.VK_RIGHT:
 				right = bl; if (bl) facing = 1; break;
-			case KeyEvent.VK_W: case KeyEvent.VK_UP:
+			case KeyEvent.VK_W:
 				if (bl && onGround) { jump = true; onGround = false; setVy(JUMP_FORCE); }
 				break;
+			case KeyEvent.VK_UP: case KeyEvent.VK_I:
+				aimUp = bl; break;
 			case KeyEvent.VK_S: case KeyEvent.VK_DOWN:
 				crouch = bl; if (bl && onGround) setVy(0); break;
 			case KeyEvent.VK_J: case KeyEvent.VK_SPACE:
 				shoot = bl;
 				if (bl && onGround) melee = true;
+				break;
+			case KeyEvent.VK_K: case KeyEvent.VK_CONTROL:
+				if (bl) throwGrenade = true;
 				break;
 		}
 	}
@@ -175,6 +178,9 @@ public class Player extends ElementObj {
 		int h = getH(), prevBottom = getY() + h;
 		setX(getX() + getVx());
 		constrainByLivingBoss();
+		if (GameThread.isCombatActive()) {
+			setX(Math.max(GameThread.getCombatLeft(), Math.min(GameThread.getCombatRight() - getW(), getX())));
+		}
 		if (onGround && !hasSupportBelow(h)) { onGround = false; setVy(Math.max(getVy(), GRAVITY)); }
 		setY(getY() + getVy());
 
@@ -210,6 +216,15 @@ public class Player extends ElementObj {
 		if (shootCooldown > 0) shootCooldown--;
 		if (hurtCooldown > 0) hurtCooldown--;
 		if (meleeTimer > 0) meleeTimer--;
+		if (grenadeCooldown > 0) grenadeCooldown--;
+
+		if (throwGrenade && grenades > 0 && grenadeCooldown == 0) {
+			throwGrenade = false; grenades--; grenadeCooldown = 35;
+			Bullet bomb = new Bullet();
+			int bx = facing > 0 ? getX() + getW() : getX() - 14;
+			bomb.createElement(bx + "," + (getY() + 8) + ",14,14," + (facing * 6) + ",-9,grenade,4,player");
+			ElementManager.getManager().addElement(bomb, GameElement.PLAYFILE);
+		} else if (throwGrenade) throwGrenade = false;
 
 		// 近战攻击
 		if (melee && onGround && meleeTimer <= 0 && shootCooldown <= 0) {
@@ -218,7 +233,8 @@ public class Player extends ElementObj {
 				meleeTimer = 18;
 				shootCooldown = 18;
 				nearby.onHit(this);
-				try { SoundManager.getInstance().playSFX("fire"); } catch (Exception e) {}
+				if (nearby.isLive()) nearby.onHit(this);
+				try { SoundManager.getInstance().playSFX("knife"); } catch (Exception e) {}
 			}
 			melee = false;
 		}
@@ -254,11 +270,12 @@ public class Player extends ElementObj {
 
 	private void saveProgress() {
 		savedScore = getScore(); savedLives = getLives();
-		savedHp = Math.max(1, getHp()); savedWeapon = getWeaponName();
+		savedHp = Math.max(1, getHp()); savedWeapon = getWeaponName(); savedAmmo = ammo; savedGrenades = grenades;
 		savedLevel = GameThread.getCurrentLevel();
 	}
 
 	private void fire() {
+		if (ammo == 0) { setWeaponName("NORMAL"); ammo = -1; }
 		int bw = 8, bh = 4, speed = 12, damage = 1;
 		String type = "normal";
 		switch (getWeaponName()) {
@@ -268,14 +285,23 @@ public class Player extends ElementObj {
 			default: bw = 8; bh = 4; speed = 12; damage = 1; type = "normal"; shootCooldown = 10; break;
 		}
 
+		int bulletVx = facing * speed, bulletVy = 0;
 		int bx = facing > 0 ? getX() + getW() - 10 : getX() - bw - 5;
-		int by = crouch ? getY() + 28 : getY() + 20;
+		int by = crouch ? getY() + 30 : getY() + 18;
+		if (aimUp) {
+			if (Math.abs(getVx()) > 0) { bulletVx = facing * Math.max(4, speed * 7 / 10); bulletVy = -Math.max(4, speed * 7 / 10); }
+			else { bulletVx = 0; bulletVy = -speed; }
+			bx = getX() + getW() / 2; by = getY() - bh;
+		} else if (!onGround && crouch) {
+			bulletVx = 0; bulletVy = speed; bx = getX() + getW() / 2; by = getY() + getH();
+		}
 
 		Bullet bullet = new Bullet();
-		bullet.createElement(bx + "," + by + "," + bw + "," + bh + "," + (facing * speed) + ",0," + type + "," + damage + ",player");
+		bullet.createElement(bx + "," + by + "," + bw + "," + bh + "," + bulletVx + "," + bulletVy + "," + type + "," + damage + ",player");
 		ElementManager.getManager().addElement(bullet, GameElement.PLAYFILE);
+		spawnEffect(bx + (bulletVx > 0 ? bw + 6 : bulletVx < 0 ? -2 : 0), by + bh / 2, "muzzle", bulletVx == 0 ? facing : Integer.signum(bulletVx), "");
 
-		if ("SPREAD".equals(getWeaponName())) {
+		if ("SPREAD".equals(getWeaponName()) && !aimUp && !(!onGround && crouch)) {
 			for (int ang = -1; ang <= 1; ang += 2) {
 				Bullet b2 = new Bullet();
 				b2.createElement(bx + "," + by + "," + bw + "," + bh + "," + (int)(facing * speed * 0.65) + "," + (ang * 3) + ",spread," + damage + ",player");
@@ -283,6 +309,13 @@ public class Player extends ElementObj {
 			}
 		}
 		try { SoundManager.getInstance().playSFX("fire"); } catch (Exception e) {}
+		if (ammo > 0 && --ammo == 0) { setWeaponName("NORMAL"); ammo = -1; }
+	}
+
+	private void spawnEffect(int x, int y, String type, int dir, String label) {
+		CombatEffect effect = new CombatEffect();
+		effect.createElement(x + "," + y + "," + type + "," + dir + "," + label);
+		ElementManager.getManager().addElement(effect, GameElement.EFFECT);
 	}
 
 	@Override
@@ -298,11 +331,17 @@ public class Player extends ElementObj {
 		int damage = attacker instanceof Bullet ? ((Bullet) attacker).getDamage() : 1;
 		setHp(getHp() - damage);
 		hurtCooldown = 45;
+		setX(getX() + (attacker.getX() < getX() ? 18 : -18));
+		CombatEffect hurt = new CombatEffect(); hurt.createElement((getX()+getW()/2) + "," + (getY()+20) + ",impact,1,");
+		ElementManager.getManager().addElement(hurt, GameElement.EFFECT);
+		GameMainJPanel.shake(3);
 		if (getHp() <= 0) {
 			if (getLives() > 1) {
 				setLives(getLives() - 1); setHp(getMaxHp());
-				setX(80); setY(382); setVy(0); setVx(0);
-				onGround = true; hurtCooldown = 90;
+				int checkpoint = GameThread.isCombatActive() ? GameThread.getCombatLeft() + 55
+						: Math.max(80, GameMainJPanel.cameraX + 90);
+				setX(Math.min(2050, checkpoint)); setY(382); setVy(0); setVx(0);
+				onGround = true; hurtCooldown = 150;
 				try { SoundManager.getInstance().playSFX("die"); } catch (Exception e) {}
 			} else {
 				setLives(0); setLive(false);
@@ -321,11 +360,25 @@ public class Player extends ElementObj {
 	public void onPickItem(ElementObj item) {
 		String t = item.getItemType(); if (t == null) return;
 		switch (t) {
-			case "WEAPON_H": setWeaponName("HEAVY"); break;
-			case "WEAPON_S": setWeaponName("SPREAD"); break;
-			case "WEAPON_F": setWeaponName("FLAME"); break;
-			case "HEALTH": setHp(Math.min(getHp() + 3, getMaxHp())); break;
-			case "LIFE": setLives(getLives() + 1); break;
+			case "WEAPON_H": setWeaponName("HEAVY"); ammo = 140; break;
+			case "WEAPON_S": setWeaponName("SPREAD"); ammo = 45; break;
+			case "WEAPON_F": setWeaponName("FLAME"); ammo = 60; break;
+			case "HEALTH": setHp(Math.min(getHp() + 8, getMaxHp())); break;
+			case "LIFE": setLives(getLives() + 1); grenades = Math.min(9, grenades + 2); break;
+		}
+		spawnEffect(getX(), getY(), "text", 1, pickupLabel(t));
+	}
+
+	private String pickupLabel(String type) {
+		switch (type) {
+			case "WEAPON_H": return "HEAVY MACHINE GUN!";
+			case "WEAPON_S": return "SHOTGUN!";
+			case "WEAPON_F": return "FLAME SHOT!";
+			case "HEALTH": return "RECOVER!";
+			default: return "1UP!";
 		}
 	}
+
+	public int getAmmo() { return ammo; }
+	public int getGrenades() { return grenades; }
 }

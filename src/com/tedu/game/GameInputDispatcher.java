@@ -31,6 +31,11 @@ public class GameInputDispatcher implements KeyEventDispatcher {
 	}
 
 	private void onKeyPressed(int key) {
+		if (key == KeyEvent.VK_P && !pressedKeys.contains(key)) {
+			if (GameThread.gameState == GameThread.STATE_PLAYING) GameThread.gameState = GameThread.STATE_PAUSED;
+			else if (GameThread.gameState == GameThread.STATE_PAUSED) GameThread.gameState = GameThread.STATE_PLAYING;
+			pressedKeys.add(key); return;
+		}
 		// 全局状态切换
 		if (key == KeyEvent.VK_ENTER) {
 			if (GameThread.gameState == GameThread.STATE_MENU) {
@@ -64,7 +69,7 @@ public class GameInputDispatcher implements KeyEventDispatcher {
 	}
 
 	private void onKeyReleased(int key) {
-		if (key == KeyEvent.VK_M) {
+		if (key == KeyEvent.VK_M || key == KeyEvent.VK_P) {
 			pressedKeys.remove(key);
 			return;
 		}

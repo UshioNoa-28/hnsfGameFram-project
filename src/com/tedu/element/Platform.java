@@ -15,40 +15,26 @@ public class Platform extends ElementObj {
 		int x = getX(), y = getY(), w = getW(), h = getH();
 
 		if ("GROUND".equals(platformType)) {
-			// 草地 + 泥土
-			g.setColor(new Color(34, 102, 34));
-			g.fillRect(x, y - 6, w, 10);
-			// 草丛纹理
-			g.setColor(new Color(22, 68, 22));
-			for (int i = 0; i < w; i += 16) {
-				g.fillRect(x + i + 3, y - 8, 3, 5);
-				g.fillRect(x + i + 9, y - 6, 2, 4);
-			}
-			// 泥土层
-			g.setColor(new Color(120, 82, 42));
-			g.fillRect(x, y, w, 18);
-			g.setColor(new Color(92, 60, 28));
-			g.fillRect(x, y, w, 2);
-			// 深层
-			g.setColor(new Color(64, 46, 32));
-			g.fillRect(x, y + 18, w, h - 18);
-			// 纹理线
-			g.setColor(new Color(78, 52, 36));
-			for (int i = 20; i < w; i += 40) {
-				g.drawLine(x + i, y + 20, x + i - 6, y + h - 4);
+			// Thin sandy collision lip; the painted battlefield remains visible below it.
+			g.setColor(new Color(224, 174, 92)); g.fillRect(x, y - 3, w, 4);
+			g.setColor(new Color(105, 69, 38, 135)); g.fillRect(x, y + 1, w, Math.max(0, h - 1));
+			g.setColor(new Color(54, 39, 28, 90)); g.fillRect(x, y + 46, w, Math.max(0, h - 46));
+			for (int i = 9; i < w; i += 31) {
+				g.setColor((i & 1) == 0 ? new Color(62, 47, 35) : new Color(156, 111, 62));
+				g.fillRect(x + i, y + 8 + (i % 17), 5 + i % 8, 3);
 			}
 		} else {
-			// 灰色平台
-			g.setColor(new Color(96, 100, 106));
+			// Battered military scaffold with chipped highlights.
+			g.setColor(new Color(66, 62, 54));
 			g.fillRect(x, y, w, h);
-			g.setColor(new Color(168, 174, 178));
+			g.setColor(new Color(185, 166, 124));
 			g.fillRect(x, y, w, 3);
 			g.fillRect(x, y + 3, 3, h - 3);
-			g.setColor(new Color(58, 62, 68));
+			g.setColor(new Color(34, 32, 29));
 			g.fillRect(x, y + h - 3, w, 3);
 			g.fillRect(x + w - 3, y, 3, h);
 			// 铆钉装饰
-			g.setColor(new Color(200, 200, 200));
+			g.setColor(new Color(215, 188, 122));
 			for (int i = 10; i < w; i += 24) {
 				g.fillOval(x + i, y + 4, 4, 4);
 			}

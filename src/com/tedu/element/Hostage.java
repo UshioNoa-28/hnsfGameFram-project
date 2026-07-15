@@ -32,7 +32,11 @@ public class Hostage extends ElementObj {
 		if (frames == null || frames.isEmpty()) frames = GameLoad.getSprites("hostage");
 
 		ImageIcon frame = null;
-		if (frames != null && !frames.isEmpty()) frame = frames.get(animFrame % frames.size());
+		if (frames != null && !frames.isEmpty()) {
+			int idx = rescuedAnim ? Math.min(frames.size() - 1, 2 + rescueTimer / 3)
+					: animFrame % Math.min(2, frames.size());
+			frame = frames.get(idx);
+		}
 
 		if (frame != null && frame.getImage() != null) {
 			int iw = frame.getIconWidth(), ih = frame.getIconHeight();
@@ -47,7 +51,10 @@ public class Hostage extends ElementObj {
 
 	@Override
 	protected void move() {
-		if (rescuedAnim) { rescueTimer++; if (rescueTimer > 50) setLive(false); return; }
+		if (rescuedAnim) {
+			rescueTimer++; if (rescueTimer > 55) setX(getX() + 2);
+			if (rescueTimer > 125) setLive(false); return;
+		}
 		animTimer++; if (animTimer >= 12) { animTimer = 0; animFrame++; }
 	}
 

@@ -1,11 +1,14 @@
 package com.tedu.show;
 
+import java.awt.Dimension;
+import java.awt.Image;
 import java.awt.event.KeyListener;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
 
 import javax.swing.JFrame;
 import javax.swing.JPanel;
+import javax.swing.ImageIcon;
 
 
 /**
@@ -25,11 +28,11 @@ public class GameJFrame extends JFrame{
 		init();
 	}
 	public void init() {
-		this.setSize(GameX, GameY);
 		this.setTitle("合金弹头 · JavaSE Edition");
 		this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		this.setLocationRelativeTo(null);
 		this.setResizable(false);
+		Image icon = new ImageIcon("image/icon.png").getImage();
+		if (icon != null) this.setIconImage(icon);
 	}
 
 	public void addButton() {
@@ -37,7 +40,10 @@ public class GameJFrame extends JFrame{
 
 	public void start() {
 		if(jPanel!=null) {
-			this.add(jPanel);
+			jPanel.setPreferredSize(new Dimension(GameX, GameY));
+			this.setContentPane(jPanel);
+			this.pack();
+			this.setLocationRelativeTo(null);
 		}
 		if(keyListener !=null) {
 			this.addKeyListener(keyListener);

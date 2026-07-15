@@ -37,7 +37,7 @@ public class GameLoad {
 	private static Properties pro = new Properties();
 
 	/** 合金弹头资源根目录 */
-	private static final String MS_ASSET_ROOT = "../合金弹头/合金弹头/images";
+	private static final String MS_ASSET_ROOT = "image";
 
 	/** 背景图片 */
 	public static final List<Image> bgImages = new ArrayList<>();
@@ -152,10 +152,10 @@ public class GameLoad {
 		String root = resolveAssetRoot();
 		System.out.println("[GameLoad] 合金弹头资源路径: " + new File(root).getAbsolutePath());
 
-		loadSpriteDir("player", root + "/plays", DIR_FILTER_RIGHT);
-		loadSpriteDir("enemy", root + "/Enemy");
+		loadSpriteDir("player", root + "/player", DIR_FILTER_RIGHT);
+		loadSpriteDir("enemy", root + "/enemy");
 		// 敌人子分组: 不同行为使用不同帧
-		{ String ed = root + "/Enemy";
+		{ String ed = root + "/enemy";
 		addSpriteFile("enemy", "stand_shoot", ed + "/20070130041731OFQDOJuj-103.png");
 		addSpriteFile("enemy", "stand_shoot2", ed + "/20070130041731OFQDOJuj-227.png");
 		for (int i = 174; i <= 178; i++) addSpriteFile("enemy", "walk_shoot", ed + "/20070130041731OFQDOJuj-" + i + ".png");
@@ -165,14 +165,13 @@ public class GameLoad {
 		addSpriteFile("enemy", "static_guard", ed + "/20070130041731OFQDOJuj-202.png");
 		for (int i = 117; i <= 120; i++) addSpriteFile("enemy", "death", ed + "/20070130041731OFQDOJuj-" + i + ".png"); }
 		loadSpriteDir("boss", root + "/boss");
-		loadSpriteDir("explosion", root + "/爆炸");
-		loadSpriteDir("bullet", root + "/子弹");
-		loadSpriteDir("hostage", root + "/人质");
-		loadSpriteDir("aircraft", root + "/飞机");
-	addSpriteFile("aircraft", "fly_right", root + "/飞机/plane_fly1.png");
-	addSpriteFile("aircraft", "fly_left", root + "/飞机/plane_fly0.png");
-	// 加载背景图
-	loadBackgrounds(root + "/背景");
+		loadSpriteDir("explosion", root + "/explosion");
+		loadSpriteDir("bullet", root + "/bullet");
+		loadSpriteDir("hostage", root + "/hostage");
+		loadSpriteDir("aircraft", root + "/aircraft");
+		addSpriteFile("aircraft", "fly_right", root + "/aircraft/plane_fly1.png");
+		addSpriteFile("aircraft", "fly_left", root + "/aircraft/plane_fly0.png");
+		loadBackgrounds(root + "/bg");
 
 		System.out.println("[GameLoad] 精灵加载完成: " + spriteGroups.size() + " 类, 背景: " + bgImages.size() + " 张");
 		for (String cat : spriteGroups.keySet()) {
@@ -188,6 +187,10 @@ public class GameLoad {
 	 * 解析资源根目录
 	 */
 	private static String resolveAssetRoot() {
+		File local = new File("image");
+		if (local.isDirectory()) return local.getAbsolutePath();
+		local = new File(System.getProperty("user.dir"), "image");
+		if (local.isDirectory()) return local.getAbsolutePath();
 		// 先尝试直接路径
 		File dir = new File(MS_ASSET_ROOT);
 		if (dir.exists() && dir.isDirectory()) return MS_ASSET_ROOT;

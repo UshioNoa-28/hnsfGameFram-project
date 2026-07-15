@@ -11,6 +11,7 @@ import com.tedu.manager.GameElement;
 import com.tedu.manager.GameLoad;
 import com.tedu.manager.SoundManager;
 import com.tedu.show.GameMainJPanel;
+import com.tedu.controller.GameThread;
 
 /**
  * 敌人 — 合金弹头敌人精灵，按类型使用不同帧组
@@ -21,15 +22,16 @@ public class Enemy extends ElementObj {
 	private int moveDir = -1;
 	private int shootTimer = 0, dirChangeTimer = 0;
 	private int animFrame = 0, animTimer = 0;
+	private int attackPose = 0;
 	private int deathFrame = 0, deathTimer = 0;
 	private boolean dying = false;
 	private static Random rand = new Random();
 
-	public Enemy() { setHp(2); setMaxHp(2); setFrom("enemy"); }
+	public Enemy() { setHp(2); setMaxHp(2); setFrom("enemy"); shootTimer = 55 + rand.nextInt(40); }
 
 	@Override
 	public void showElement(Graphics g) {
-		if (!isLive() && dying) {
+		if (dying) {
 			List<ImageIcon> dframes = GameLoad.getSprites("enemy", "death");
 			if (dframes != null && !dframes.isEmpty()) {
 				ImageIcon frame = dframes.get(deathFrame % dframes.size());
@@ -62,9 +64,11 @@ public class Enemy extends ElementObj {
 			g.setColor(java.awt.Color.RED); g.fillRect(getX(), getY(), getW(), getH());
 		}
 
-		int hpW = getW() * Math.max(0, getHp()) / getMaxHp();
-		g.setColor(java.awt.Color.RED); g.fillRect(getX(), getY() - 5, getW(), 2);
-		g.setColor(java.awt.Color.GREEN); g.fillRect(getX(), getY() - 5, hpW, 2);
+		if (getHp() < getMaxHp()) {
+			int hpW = getW() * Math.max(0, getHp()) / getMaxHp();
+			g.setColor(new java.awt.Color(80, 15, 12)); g.fillRect(getX(), getY() - 5, getW(), 2);
+			g.setColor(new java.awt.Color(240, 175, 44)); g.fillRect(getX(), getY() - 5, hpW, 2);
+		}
 	}
 
 	private String getAnimGroup() {
@@ -80,12 +84,10 @@ public class Enemy extends ElementObj {
 
 	@Override
 	protected void move() {
-		if (!isLive()) {
-			if (dying) {
-				deathTimer++;
-				if (deathTimer >= 6) { deathTimer = 0; deathFrame++; }
-				if (deathFrame >= 4) dying = false;
-			}
+		if (dying) {
+			deathTimer++;
+			if (deathTimer >= 6) { deathTimer = 0; deathFrame++; }
+			if (deathFrame >= 4) setLive(false);
 			return;
 		}
 
@@ -93,6 +95,7 @@ public class Enemy extends ElementObj {
 		if (players == null || players.isEmpty()) { setVx(-1); setX(getX() + getVx()); return; }
 		ElementObj player = players.get(0);
 		int dx = player.getX() - getX();
+		if (Math.abs(dx) > 720) { setVx(0); return; }
 
 		switch (enemyType) {
 			case "SNIPER":
@@ -104,11 +107,12 @@ public class Enemy extends ElementObj {
 				moveDir = dx > 0 ? 1 : -1;
 				setVx(Math.abs(dx) > 180 ? moveDir * 2 : 0);
 				break;
-			default: // SOLDIER
-				dirChangeTimer--;
-				if (dirChangeTimer <= 0) { moveDir = rand.nextBoolean() ? -1 : 1; dirChangeTimer = 60 + rand.nextInt(60); }
-				if (Math.abs(dx) < 300) moveDir = dx > 0 ? 1 : -1;
-				setVx(moveDir); break;
+			default: // SOLDIER: enter range, then strafe instead of blindly touching the player
+				moveDir = dx > 0 ? 1 : -1;
+				if (Math.abs(dx) > 230) setVx(moveDir);
+				else if (Math.abs(dx) < 115) setVx(-moveDir);
+				else setVx(0);
+				break;
 		}
 		setX(getX() + getVx());
 
@@ -144,7 +148,9 @@ public class Enemy extends ElementObj {
 
 	@Override
 	protected void add(long gameTime) {
-		if (!isLive()) return;
+		if (!isLive() || dying) return;
+		if (GameThread.getStageTime() < 120) return;
+		if (attackPose > 0) attackPose--;
 		if (--shootTimer > 0) return;
 
 		// GUARD 不射击
@@ -154,8 +160,9 @@ public class Enemy extends ElementObj {
 		if (players == null || players.isEmpty()) return;
 		ElementObj player = players.get(0);
 		int dx = player.getX() - getX();
-		int interval = enemyType.equals("SNIPER") || enemyType.equals("TURRET") ? 40
-				: enemyType.equals("RUNNER") ? 100 : 70;
+		if (Math.abs(dx) > 650) { shootTimer = 10; return; }
+		int interval = enemyType.equals("SNIPER") || enemyType.equals("TURRET") ? 68
+				: enemyType.equals("RUNNER") ? 125 : 92;
 
 		if (Math.abs(dx) < 500) {
 			shootTimer = interval;
@@ -164,15 +171,22 @@ public class Enemy extends ElementObj {
 			Bullet bullet = new Bullet();
 			bullet.createElement((dir > 0 ? getX() + 28 : getX() - 10) + "," + (getY() + 10) + ",6,4," + (dir * 6) + ",0,normal,1,enemy");
 			ElementManager.getManager().addElement(bullet, GameElement.PLAYFILE);
+			CombatEffect flash = new CombatEffect();
+			flash.createElement((dir > 0 ? getX() + 34 : getX() - 8) + "," + (getY() + 12) + ",muzzle," + dir + ",");
+			ElementManager.getManager().addElement(flash, GameElement.EFFECT);
+			attackPose = 12;
 		}
 	}
 
 	@Override
 	public void onHit(ElementObj attacker) {
+		if (dying) return;
 		if ("enemy".equals(attacker.getFrom())) return;
 		setHp(getHp() - (attacker instanceof Bullet ? ((Bullet) attacker).getDamage() : 1));
+		CombatEffect hit = new CombatEffect(); hit.createElement((getX() + getW()/2) + "," + (getY() + getH()/2) + ",impact,1,");
+		ElementManager.getManager().addElement(hit, GameElement.EFFECT);
+		GameMainJPanel.shake(2);
 		if (getHp() <= 0) {
-			setLive(false);
 			dying = true; deathFrame = 0; deathTimer = 0;
 			addScoreToPlayer(); createExplosion(); tryDropItem();
 			try { SoundManager.getInstance().playSFX("die"); } catch (Exception e) {}
@@ -193,7 +207,7 @@ public class Enemy extends ElementObj {
 	}
 
 	private void tryDropItem() {
-		if (rand.nextInt(100) < 30) {
+		if (rand.nextInt(100) < 20) {
 			String[] types = {"WEAPON_H", "WEAPON_S", "WEAPON_F", "HEALTH", "LIFE"};
 			ItemDrop item = new ItemDrop();
 			item.createElement(getX() + "," + (getY() - 10) + "," + types[rand.nextInt(types.length)]);

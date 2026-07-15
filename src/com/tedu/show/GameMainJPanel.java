@@ -23,6 +23,9 @@ public class GameMainJPanel extends JPanel implements Runnable {
 	private ElementManager em;
 	public static int cameraX = 0;
 	public static int cameraY = 0;
+	private static int targetCameraX = 0;
+	private static int shakeFrames = 0;
+	private static int shakePower = 0;
 	public static final int WORLD_WIDTH = 2400;
 	public static final int WORLD_HEIGHT = 600;
 	private static int levelEndX = 2200;
@@ -36,13 +39,13 @@ public class GameMainJPanel extends JPanel implements Runnable {
 	}
 
 	public static void followPlayer(int px, int py) {
-		cameraX = px - 400;
-		cameraY = py - 300;
-		if (cameraX < 0) cameraX = 0;
-		if (cameraY < 0) cameraY = 0;
-		if (cameraX > WORLD_WIDTH - 800) cameraX = WORLD_WIDTH - 800;
-		if (cameraY > WORLD_HEIGHT - 600) cameraY = WORLD_HEIGHT - 600;
+		targetCameraX = Math.max(0, Math.min(WORLD_WIDTH - 800, px - 300));
+		cameraX += Math.round((targetCameraX - cameraX) * 0.12f);
+		cameraY = 0;
 	}
+
+	public static void resetCamera() { cameraX = targetCameraX = 0; cameraY = 0; shakeFrames = 0; }
+	public static void shake(int power) { shakePower = Math.max(shakePower, power); shakeFrames = Math.max(shakeFrames, 8); }
 
 	public static int getLevelEndX() { return levelEndX; }
 	public static void setLevelEndX(int x) { levelEndX = x; }
@@ -56,8 +59,13 @@ public class GameMainJPanel extends JPanel implements Runnable {
 		// 视差背景
 		Background.drawParallaxBackground(g, cameraX, cameraY, WORLD_WIDTH);
 
-		// 摄像机变换
-		g2d.translate(-cameraX, -cameraY);
+		int sx = 0, sy = 0;
+		if (shakeFrames > 0) {
+			sx = (int)(Math.random() * (shakePower * 2 + 1)) - shakePower;
+			sy = (int)(Math.random() * (shakePower * 2 + 1)) - shakePower;
+			shakeFrames--; if (shakeFrames == 0) shakePower = 0;
+		}
+		g2d.translate(-cameraX + sx, -cameraY + sy);
 
 		Map<GameElement, List<ElementObj>> all = em.getGameElements();
 
@@ -71,10 +79,12 @@ public class GameMainJPanel extends JPanel implements Runnable {
 		drawElements(all.get(GameElement.EFFECT), g2d);
 
 		// 恢复摄像机
-		g2d.translate(cameraX, cameraY);
+		g2d.translate(cameraX - sx, cameraY - sy);
 
-		// HUD
-		drawHUD(g2d);
+		// HUD is supplied by the localized panel; keeping one renderer avoids doubled text.
+		// Cinematic edge vignette keeps the eye on the action.
+		g2d.setColor(new Color(0, 0, 0, 35));
+		for (int i = 0; i < 18; i += 3) g2d.drawRect(i, i, 799 - i * 2, 599 - i * 2);
 	}
 
 	private void drawElements(List<ElementObj> list, Graphics g) {

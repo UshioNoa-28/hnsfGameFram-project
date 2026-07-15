@@ -1,0 +1,4 @@
+﻿合金弹头·觉醒版 重制交付包
+Build: 2026-07-15
+Java: 21+
+入口: 启动游戏.cmd / hnsfGameFram.jar

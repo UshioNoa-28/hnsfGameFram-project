@@ -4,6 +4,9 @@ import java.util.List;
 import java.util.Map;
 
 import com.tedu.element.ElementObj;
+import com.tedu.element.Enemy;
+import com.tedu.element.ItemDrop;
+import com.tedu.element.CombatEffect;
 import com.tedu.manager.ElementManager;
 import com.tedu.manager.GameElement;
 import com.tedu.manager.GameLoad;
@@ -23,8 +26,17 @@ public class GameThread extends Thread {
 	public static final int STATE_GAMEOVER = 2;
 	public static final int STATE_WIN = 3;
 	public static final int STATE_LEVEL_CLEAR = 4;
+	public static final int STATE_PAUSED = 5;
 
 	public static int gameState = STATE_MENU;
+	private static long stageTime = 0;
+	private int transitionTicks = 0;
+	private int[] battleZones;
+	private int battleZoneIndex, battleWave, battleDelay;
+	private boolean battleActive;
+	private static int combatLeft = -1, combatRight = -1, combatAlert = 0;
+	private static int bossAlert = 0;
+	private boolean bossTriggered;
 
 	public GameThread() {
 		em = ElementManager.getManager();
@@ -48,7 +60,12 @@ public class GameThread extends Thread {
 					break;
 				case STATE_GAMEOVER:
 				case STATE_WIN:
+					sleepFrame(50);
+					break;
 				case STATE_LEVEL_CLEAR:
+					if (--transitionTicks <= 0) { currentLevel++; gameState = STATE_PLAYING; }
+					break;
+				case STATE_PAUSED:
 					sleepFrame(50);
 					break;
 			}
@@ -66,8 +83,13 @@ public class GameThread extends Thread {
 		GameLoad.loadObj();
 		GameLoad.MapLoad(currentLevel);
 		GameLoad.loadPlay();
-		GameMainJPanel.cameraX = 0;
-		GameMainJPanel.cameraY = 0;
+		GameMainJPanel.resetCamera();
+		stageTime = 0;
+		battleZones = currentLevel == 1 ? new int[] {520, 1220, 1800}
+				: currentLevel == 2 ? new int[] {430, 1080, 1720} : new int[] {430, 1120};
+		battleZoneIndex = 0; battleWave = 0; battleDelay = 0; battleActive = false;
+		combatLeft = combatRight = -1; combatAlert = 0;
+		bossAlert = 0; bossTriggered = false;
 
 		// 启动背景音乐
 		try {
@@ -79,7 +101,8 @@ public class GameThread extends Thread {
 
 	private void gameRun() {
 		long gameTime = 0L;
-		while (gameState == STATE_PLAYING) {
+		while (gameState == STATE_PLAYING || gameState == STATE_PAUSED) {
+			if (gameState == STATE_PAUSED) { sleepFrame(40); continue; }
 			Map<GameElement, List<ElementObj>> all = em.getGameElements();
 			List<ElementObj> players = em.getElementsByKey(GameElement.PLAY);
 			List<ElementObj> enemys = em.getElementsByKey(GameElement.ENEMY);
@@ -96,14 +119,70 @@ public class GameThread extends Thread {
 			enemyBulletHitPlayer(bullets, players);
 			playerPickItem(players, items);
 			playerRescueHostage(players, items);
+			updateBattleDirector(players);
 			if (checkLevelEnd(players)) break;
-			spawnEnemyWave(gameTime);
 			spawnAircraft(gameTime);
 			checkGameOver(players);
 			updateCamera(players);
 
-			gameTime++;
-			sleepFrame(10);
+			gameTime++; stageTime = gameTime;
+			sleepFrame(16);
+		}
+	}
+
+	private void updateBattleDirector(List<ElementObj> players) {
+		if (players == null || players.isEmpty() || !players.get(0).isLive()) return;
+		ElementObj player = players.get(0);
+		if (combatAlert > 0) combatAlert--;
+		if (bossAlert > 0) bossAlert--;
+		if (currentLevel == 3 && !bossTriggered && player.getX() >= 1620
+				&& !em.getElementsByKey(GameElement.BOSS).isEmpty()) {
+			bossTriggered = true; bossAlert = 170; GameMainJPanel.shake(9);
+			try { SoundManager.getInstance().playSFX("boss"); } catch (Exception ignored) {}
+		}
+		if (!battleActive) {
+			if (battleZoneIndex < battleZones.length && player.getX() >= battleZones[battleZoneIndex]) {
+				battleActive = true; battleWave = 1; battleDelay = 0;
+				combatLeft = Math.max(0, battleZones[battleZoneIndex] - 220);
+				combatRight = Math.min(2180, battleZones[battleZoneIndex] + 500);
+				combatAlert = 110;
+				spawnDirectedWave(battleWave);
+			}
+			return;
+		}
+
+		int living = 0;
+		for (ElementObj e : em.getElementsByKey(GameElement.ENEMY)) {
+			if (e instanceof Enemy && e.isLive() && e.getX() >= combatLeft - 100 && e.getX() <= combatRight + 100) living++;
+		}
+		if (living > 0) { battleDelay = 0; return; }
+		if (++battleDelay < 55) return;
+		battleDelay = 0;
+		if (battleWave < (currentLevel == 1 ? 2 : 3)) {
+			spawnDirectedWave(++battleWave); combatAlert = 45;
+		} else {
+			String rewardType = player.getHp() * 2 <= player.getMaxHp() ? "HEALTH"
+					: (battleZoneIndex % 2 == 0 ? "WEAPON_H" : "WEAPON_S");
+			ItemDrop reward = new ItemDrop(); reward.createElement((combatRight - 115) + ",370," + rewardType);
+			em.addElement(reward, GameElement.ITEM);
+			player.setScore(player.getScore() + 250);
+			CombatEffect clearText = new CombatEffect();
+			clearText.createElement((player.getX() - 15) + "," + (player.getY() - 10) + ",text,1,AREA BONUS +250");
+			em.addElement(clearText, GameElement.EFFECT);
+			battleActive = false; battleZoneIndex++; combatLeft = combatRight = -1; combatAlert = 75;
+		}
+	}
+
+	private void spawnDirectedWave(int wave) {
+		String[][] patterns = currentLevel == 1
+				? new String[][] {{"SOLDIER","SOLDIER","RUNNER"},{"RUNNER","SOLDIER","SNIPER"}}
+				: new String[][] {{"SOLDIER","RUNNER","SOLDIER"},{"SNIPER","RUNNER","RUNNER"},{"TURRET","SOLDIER","SNIPER"}};
+		String[] pattern = patterns[Math.min(wave - 1, patterns.length - 1)];
+		for (int i = 0; i < pattern.length; i++) {
+			ElementObj proto = GameLoad.getObj("enemy"); if (proto == null) continue;
+			int x = combatRight - 35 - i * 55;
+			ElementObj enemy = proto.createElement("ENEMY," + x + ",390," + pattern[i]);
+			if (enemy != null) em.addElement(enemy, GameElement.ENEMY);
 		}
 	}
 
@@ -115,6 +194,7 @@ public class GameThread extends Thread {
 			for (int j = listB.size() - 1; j >= 0; j--) {
 				ElementObj b = listB.get(j);
 				if (!b.isLive()) continue;
+				if ("enemy".equals(a.getFrom()) && "enemy".equals(b.getFrom())) continue;
 				if (a.pk(b)) {
 					a.onHit(b);
 					b.onHit(a);
@@ -207,9 +287,8 @@ public class GameThread extends Thread {
 				gameState = STATE_WIN;
 				SoundManager.getInstance().stopBGM();
 			} else {
-				currentLevel++;
-				gameState = STATE_PLAYING; // 自动加载下一关
-				sleepFrame(500);
+				gameState = STATE_LEVEL_CLEAR;
+				transitionTicks = 22;
 			}
 			return true;
 		}
@@ -217,12 +296,13 @@ public class GameThread extends Thread {
 	}
 
 	private void spawnEnemyWave(long gameTime) {
-		if (gameTime % 300 == 0 && gameTime > 0) {
+		if (gameTime % 420 == 0 && gameTime > 0 && em.getElementsByKey(GameElement.ENEMY).size() < 9
+				&& em.getElementsByKey(GameElement.BOSS).isEmpty()) {
 			String[] types = {"SOLDIER", "SOLDIER", "RUNNER"};
 			ElementObj proto = GameLoad.getObj("enemy");
 			if (proto == null) return;
 			for (String type : types) {
-				int x = GameMainJPanel.cameraX + 820 + (int) (Math.random() * 100);
+				int x = Math.min(2180, GameMainJPanel.cameraX + 820 + (int) (Math.random() * 100));
 				int y = 400;
 				ElementObj enemy = proto.createElement("ENEMY," + x + "," + y + "," + type);
 				if (enemy != null) em.addElement(enemy, GameElement.ENEMY);
@@ -234,7 +314,10 @@ public class GameThread extends Thread {
 	 * 飞机波次 — 每600帧从天空飞过
 	 */
 	private void spawnAircraft(long gameTime) {
-		if (gameTime % 600 == 0 && gameTime > 0) {
+		if (gameTime % 900 == 0 && gameTime > 0) {
+			int aircraftCount = 0;
+			for (ElementObj e : em.getElementsByKey(GameElement.ENEMY)) if (e instanceof com.tedu.element.Aircraft && e.isLive()) aircraftCount++;
+			if (aircraftCount >= 1) return;
 			ElementObj proto = GameLoad.getObj("aircraft");
 			if (proto == null) return;
 			boolean fromLeft = Math.random() < 0.5;
@@ -273,6 +356,12 @@ public class GameThread extends Thread {
 	}
 
 	public static int getCurrentLevel() { return currentLevel; }
+	public static long getStageTime() { return stageTime; }
+	public static boolean isCombatActive() { return combatRight >= 0; }
+	public static int getCombatLeft() { return combatLeft; }
+	public static int getCombatRight() { return combatRight; }
+	public static int getCombatAlert() { return combatAlert; }
+	public static int getBossAlert() { return bossAlert; }
 
 	public static void setCurrentLevel(int lv) { currentLevel = lv; }
 }
