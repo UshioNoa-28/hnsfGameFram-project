@@ -9,23 +9,19 @@ import com.tedu.show.GameJFrame;
 import com.tedu.show.GameMainJPanel;
 
 public class GameStart {
-	/**
-	 * 程序的唯一入口
-	 */
 	public static void main(String[] args) {
-		GameJFrame gj=new GameJFrame();
-		/**实例化面板，注入到jframe中*/
-		GameMainJPanel jp=new ChineseGamePanel();
-//		实例化监听
+		GameJFrame gj = new GameJFrame();
+		GameMainJPanel jp = new ChineseGamePanel();
 		GameInputDispatcher inputDispatcher = new GameInputDispatcher();
-//		实例化主线程
-		GameThread th=new GameThread();
-//		注入
+		GameThread th = new GameThread();
+
 		gj.setjPanel(jp);
-		gj.setTitle("合金弹头 · Java 实训版");
+		gj.setTitle("合金弹头 · 觉醒版  |  Metal Slug Awakened Edition");
 		gj.setThead(th);
+
 		KeyboardFocusManager.getCurrentKeyboardFocusManager()
 				.addKeyEventDispatcher(inputDispatcher);
+
 		gj.addWindowFocusListener(new WindowAdapter() {
 			@Override
 			public void windowLostFocus(WindowEvent e) {
@@ -34,6 +30,5 @@ public class GameStart {
 		});
 
 		gj.start();
-
 	}
 }

@@ -4,50 +4,59 @@ import java.awt.Color;
 import java.awt.Graphics;
 
 /**
- * @说明 地面/平台 — 静态地形, 供玩家和敌人站立
- * @author renjj
+ * 地面/平台 — Metal Slug风格的地形渲染
  */
 public class Platform extends ElementObj {
 
 	private String platformType = "GROUND";
-	private boolean solid = true;
 
 	@Override
 	public void showElement(Graphics g) {
-		int x = getX();
-		int y = getY();
-		int w = getW() > 0 ? getW() : 100;
-		int h = getH() > 0 ? getH() : 20;
+		int x = getX(), y = getY(), w = getW(), h = getH();
 
 		if ("GROUND".equals(platformType)) {
-			// 地面 — 绿色草地 + 棕色泥土
-			g.setColor(new Color(80, 160, 60));
-			g.fillRect(x, y, w, 6);
-			g.setColor(new Color(120, 80, 40));
-			g.fillRect(x, y + 6, w, h - 6);
-			// 草地纹理 (小草)
-			g.setColor(new Color(60, 140, 40));
-			for (int i = 0; i < w; i += 8) {
-				g.drawLine(x + i, y + 4, x + i + 2, y - 2);
+			// 草地 + 泥土
+			g.setColor(new Color(34, 102, 34));
+			g.fillRect(x, y - 6, w, 10);
+			// 草丛纹理
+			g.setColor(new Color(22, 68, 22));
+			for (int i = 0; i < w; i += 16) {
+				g.fillRect(x + i + 3, y - 8, 3, 5);
+				g.fillRect(x + i + 9, y - 6, 2, 4);
 			}
-		} else if ("PLATFORM".equals(platformType)) {
-			// 高台 — 灰色石质
-			g.setColor(new Color(140, 130, 120));
+			// 泥土层
+			g.setColor(new Color(120, 82, 42));
+			g.fillRect(x, y, w, 18);
+			g.setColor(new Color(92, 60, 28));
+			g.fillRect(x, y, w, 2);
+			// 深层
+			g.setColor(new Color(64, 46, 32));
+			g.fillRect(x, y + 18, w, h - 18);
+			// 纹理线
+			g.setColor(new Color(78, 52, 36));
+			for (int i = 20; i < w; i += 40) {
+				g.drawLine(x + i, y + 20, x + i - 6, y + h - 4);
+			}
+		} else {
+			// 灰色平台
+			g.setColor(new Color(96, 100, 106));
 			g.fillRect(x, y, w, h);
-			g.setColor(new Color(100, 90, 80));
-			g.drawRect(x, y, w, h);
-			// 石纹
-			g.setColor(new Color(160, 150, 140));
-			g.fillRect(x + 4, y + 4, w - 8, 4);
-			// 边缘高光
-			g.setColor(new Color(200, 190, 180));
-			g.drawLine(x, y, x + w, y);
+			g.setColor(new Color(168, 174, 178));
+			g.fillRect(x, y, w, 3);
+			g.fillRect(x, y + 3, 3, h - 3);
+			g.setColor(new Color(58, 62, 68));
+			g.fillRect(x, y + h - 3, w, 3);
+			g.fillRect(x + w - 3, y, 3, h);
+			// 铆钉装饰
+			g.setColor(new Color(200, 200, 200));
+			for (int i = 10; i < w; i += 24) {
+				g.fillOval(x + i, y + 4, 4, 4);
+			}
 		}
 	}
 
 	@Override
 	public ElementObj createElement(String str) {
-		// 格式: GROUND/PLATFORM,x,y,w,h
 		String[] split = str.split(",");
 		platformType = split[0];
 		setX(Integer.parseInt(split[1]));
@@ -59,6 +68,6 @@ public class Platform extends ElementObj {
 
 	@Override
 	public void onHit(ElementObj attacker) {
-		// Static terrain is not destructible.
+		// 地形不可破坏
 	}
 }

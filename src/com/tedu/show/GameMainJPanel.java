@@ -4,30 +4,27 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.util.List;
 import java.util.Map;
 
 import javax.swing.JPanel;
 
+import com.tedu.element.Background;
 import com.tedu.element.ElementObj;
 import com.tedu.manager.ElementManager;
 import com.tedu.manager.GameElement;
 
 /**
- * @说明 游戏主面板 — 带摄像机滚动、HUD、状态画面
- * @author renjj
+ * 游戏主面板 — Metal Slug风格渲染
  */
 public class GameMainJPanel extends JPanel implements Runnable {
 
 	private ElementManager em;
-
-	/** 摄像机偏移量 */
 	public static int cameraX = 0;
 	public static int cameraY = 0;
-	/** 世界大小 */
 	public static final int WORLD_WIDTH = 2400;
 	public static final int WORLD_HEIGHT = 600;
-	/** 关卡终点X坐标 (由地图配置) */
 	private static int levelEndX = 2200;
 
 	public GameMainJPanel() {
@@ -39,38 +36,32 @@ public class GameMainJPanel extends JPanel implements Runnable {
 	}
 
 	public static void followPlayer(int px, int py) {
-		cameraX = px - 400; // 玩家在屏幕中间
+		cameraX = px - 400;
 		cameraY = py - 300;
-		// 边界限制
 		if (cameraX < 0) cameraX = 0;
 		if (cameraY < 0) cameraY = 0;
 		if (cameraX > WORLD_WIDTH - 800) cameraX = WORLD_WIDTH - 800;
 		if (cameraY > WORLD_HEIGHT - 600) cameraY = WORLD_HEIGHT - 600;
 	}
 
-	public static int getLevelEndX() {
-		return levelEndX;
-	}
-
-	public static void setLevelEndX(int x) {
-		levelEndX = x;
-	}
+	public static int getLevelEndX() { return levelEndX; }
+	public static void setLevelEndX(int x) { levelEndX = x; }
 
 	@Override
 	public void paint(Graphics g) {
 		super.paint(g);
-
 		Graphics2D g2d = (Graphics2D) g;
+		g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
 
-		// 绘制天空背景 (固定在摄像机坐标)
-		drawSky(g2d);
+		// 视差背景
+		Background.drawParallaxBackground(g, cameraX, cameraY, WORLD_WIDTH);
 
 		// 摄像机变换
 		g2d.translate(-cameraX, -cameraY);
 
 		Map<GameElement, List<ElementObj>> all = em.getGameElements();
 
-		// 绘制顺序：MAPS(地形背景) → ITEM → ENEMY → BOSS → PLAY → PLAYFILE(子弹) → EFFECT
+		// 绘制顺序: MAPS → ITEM → ENEMY → BOSS → PLAY → PLAYFILE → EFFECT
 		drawElements(all.get(GameElement.MAPS), g2d);
 		drawElements(all.get(GameElement.ITEM), g2d);
 		drawElements(all.get(GameElement.ENEMY), g2d);
@@ -82,159 +73,165 @@ public class GameMainJPanel extends JPanel implements Runnable {
 		// 恢复摄像机
 		g2d.translate(cameraX, cameraY);
 
-		// 绘制HUD (固定位置)
+		// HUD
 		drawHUD(g2d);
-	}
-
-	private void drawSky(Graphics g) {
-		// 渐变天空
-		Graphics2D g2d = (Graphics2D) g;
-		Color skyTop = new Color(100, 150, 255);
-		Color skyBottom = new Color(200, 230, 255);
-		for (int y = 0; y < 600; y++) {
-			float ratio = y / 600f;
-			int r = (int) (skyTop.getRed() * (1 - ratio) + skyBottom.getRed() * ratio);
-			int gr = (int) (skyTop.getGreen() * (1 - ratio) + skyBottom.getGreen() * ratio);
-			int b = (int) (skyTop.getBlue() * (1 - ratio) + skyBottom.getBlue() * ratio);
-			g.setColor(new Color(r, gr, b));
-			g.drawLine(0, y, 800, y);
-		}
-
-		// 绘制远景山 (相对缓慢移动 = 视差)
-		g2d.setColor(new Color(120, 180, 120));
-		for (int i = 0; i < 5; i++) {
-			int baseX = (i * 200 - cameraX / 3 % 600 + 600) % 600 - 100;
-			int baseY = 480;
-			int[] xs = {baseX, baseX + 80, baseX + 160, baseX + 200};
-			int[] ys = {baseY, baseY - 80, baseY - 60, baseY};
-			g2d.fillPolygon(xs, ys, 4);
-		}
 	}
 
 	private void drawElements(List<ElementObj> list, Graphics g) {
 		if (list == null) return;
 		for (int i = 0; i < list.size(); i++) {
 			ElementObj obj = list.get(i);
-			if (obj.isLive()) {
-				obj.showElement(g);
-			}
+			if (obj.isLive()) obj.showElement(g);
 		}
 	}
 
-	/**
-	 * 绘制HUD (固定在屏幕左上角,不受摄像机影响)
-	 */
 	private void drawHUD(Graphics g) {
 		Map<GameElement, List<ElementObj>> all = em.getGameElements();
 		List<ElementObj> players = all.get(GameElement.PLAY);
 
-		// 半透明背景
-		g.setColor(new Color(0, 0, 0, 150));
-		g.fillRect(0, 0, 800, 40);
+		// 半透明HUD背景
+		g.setColor(new Color(0, 0, 0, 170));
+		g.fillRect(0, 0, 800, 44);
+		g.setColor(new Color(60, 60, 60, 120));
+		g.fillRect(0, 44, 800, 2);
 
-		g.setFont(new Font("Monospaced", Font.BOLD, 18));
-		g.setColor(Color.WHITE);
-
-		// 显示玩家信息
 		if (players != null && !players.isEmpty()) {
-			ElementObj player = players.get(0);
-			int hp = player.getHp();
-			int maxHp = player.getMaxHp();
-			String weapon = player.getWeaponName();
-			int score = player.getScore();
-			int lives = player.getLives();
+			ElementObj p = players.get(0);
+			int hp = p.getHp(), maxHp = p.getMaxHp();
+			String weapon = p.getWeaponName();
+			int score = p.getScore(), lives = p.getLives();
 
-			// 血量条
-			g.drawString("HP:", 10, 28);
-			g.setColor(Color.RED);
-			g.fillRect(50, 12, 100, 18);
-			g.setColor(Color.GREEN);
-			int hpW = Math.max(0, hp * 100 / maxHp);
-			g.fillRect(50, 12, hpW, 18);
+			// HP条
+			g.setFont(new Font("Arial", Font.BOLD, 13));
 			g.setColor(Color.WHITE);
-			g.drawRect(50, 12, 100, 18);
+			g.drawString("HP", 8, 28);
 
-			g.drawString("SCORE:" + score, 170, 28);
-			g.drawString("WEAPON:" + weapon, 370, 28);
-			g.drawString("LIVES:" + lives, 560, 28);
-		} else {
-			g.drawString("SCORE:0  WEAPON:NORMAL  LIVES:0", 20, 28);
+			g.setColor(new Color(80, 20, 20));
+			g.fillRect(34, 12, 110, 20);
+			g.setColor(new Color(40, 200, 60));
+			g.fillRect(34, 12, Math.max(0, hp * 110 / maxHp), 20);
+			g.setColor(Color.WHITE);
+			g.drawRect(34, 12, 110, 20);
+			g.setFont(new Font("Arial", Font.BOLD, 12));
+			g.drawString(hp + "/" + maxHp, 65, 27);
+
+			// 分数
+			g.setColor(Color.WHITE);
+			g.setFont(new Font("Arial", Font.BOLD, 14));
+			g.drawString("SCORE " + score, 160, 28);
+
+			// 武器图标
+			g.drawString("WPN", 330, 28);
+			g.setColor(Color.YELLOW);
+			g.fillRoundRect(370, 10, 80, 24, 6, 6);
+			g.setColor(Color.BLACK);
+			g.setFont(new Font("Arial", Font.BOLD, 12));
+			String wLabel = weapon;
+			switch (weapon) {
+				case "HEAVY": wLabel = "HEAVY MG"; break;
+				case "SPREAD": wLabel = "SPREAD"; break;
+				case "FLAME": wLabel = "FLAME"; break;
+				default: wLabel = "NORMAL"; break;
+			}
+			g.drawString(wLabel, 385, 27);
+
+			// 生命数
+			g.setColor(Color.WHITE);
+			g.drawString("LIVES " + lives, 510, 28);
+
+			// 关卡
+			g.setColor(Color.CYAN);
+			g.drawString("STAGE " + com.tedu.controller.GameThread.getCurrentLevel(), 650, 28);
+
+			// 武器剩余时间指示
+			if (!"NORMAL".equals(weapon)) {
+				g.setColor(Color.ORANGE);
+				g.fillRect(370, 34, 80, 4);
+			}
 		}
 
-		// 绘制游戏状态画面
+		// 状态画面
 		int state = com.tedu.controller.GameThread.gameState;
-		if (state == com.tedu.controller.GameThread.STATE_MENU) {
-			drawMenu(g);
-		} else if (state == com.tedu.controller.GameThread.STATE_GAMEOVER) {
-			drawGameOver(g);
-		} else if (state == com.tedu.controller.GameThread.STATE_WIN) {
-			drawWin(g);
-		} else if (state == com.tedu.controller.GameThread.STATE_LEVEL_CLEAR) {
-			drawLevelClear(g);
-		}
+		if (state == com.tedu.controller.GameThread.STATE_MENU) drawMenu(g);
+		else if (state == com.tedu.controller.GameThread.STATE_GAMEOVER) drawGameOver(g);
+		else if (state == com.tedu.controller.GameThread.STATE_WIN) drawWin(g);
+		else if (state == com.tedu.controller.GameThread.STATE_LEVEL_CLEAR) drawLevelClear(g);
 	}
 
 	private void drawMenu(Graphics g) {
-		g.setColor(new Color(0, 0, 0, 180));
+		g.setColor(new Color(0, 0, 0, 200));
 		g.fillRect(0, 0, 800, 600);
 
-		g.setFont(new Font("Arial", Font.BOLD, 48));
+		g.setFont(new Font("Arial", Font.BOLD, 56));
 		g.setColor(Color.YELLOW);
-		drawCenteredString(g, "METAL SLUG", 800, 180);
+		drawCentered(g, "METAL SLUG", 800, 160);
 
-		g.setFont(new Font("Arial", Font.BOLD, 24));
+		g.setColor(Color.ORANGE);
+		g.fillRect(180, 172, 440, 4);
+
+		g.setFont(new Font("Arial", Font.BOLD, 18));
 		g.setColor(Color.WHITE);
-		drawCenteredString(g, "JavaSE Edition", 800, 230);
+		drawCentered(g, "AWAKENED EDITION", 800, 210);
 
-		g.setFont(new Font("Arial", Font.PLAIN, 18));
 		g.setColor(Color.CYAN);
-		drawCenteredString(g, "Press ENTER to Start", 800, 320);
-		drawCenteredString(g, "A/D or <-/-> Move", 800, 360);
-		drawCenteredString(g, "W or Up Jump", 800, 390);
-		drawCenteredString(g, "J or Space Shoot", 800, 420);
-		drawCenteredString(g, "S or Down Crouch", 800, 450);
+		g.setFont(new Font("Arial", Font.BOLD, 22));
+		drawCentered(g, "PRESS ENTER TO START", 800, 290);
+
+		g.setFont(new Font("Arial", Font.PLAIN, 15));
+		g.setColor(new Color(200, 200, 200));
+		drawCentered(g, "A/D or Arrow Keys : MOVE", 800, 350);
+		drawCentered(g, "W or Up Arrow : JUMP", 800, 375);
+		drawCentered(g, "S or Down Arrow : CROUCH", 800, 400);
+		drawCentered(g, "J or Space : SHOOT", 800, 425);
+
+		g.setColor(Color.ORANGE);
+		drawCentered(g, "M : TOGGLE MUSIC", 800, 470);
+
+		g.setFont(new Font("Arial", Font.ITALIC, 11));
+		g.setColor(Color.GRAY);
+		drawCentered(g, "Built with JavaSE + Swing  |  Metal Slug Sprite Resources", 800, 560);
 	}
 
 	private void drawGameOver(Graphics g) {
-		g.setColor(new Color(0, 0, 0, 180));
+		g.setColor(new Color(0, 0, 0, 200));
 		g.fillRect(0, 0, 800, 600);
 
-		g.setFont(new Font("Arial", Font.BOLD, 56));
+		g.setFont(new Font("Arial", Font.BOLD, 60));
 		g.setColor(Color.RED);
-		drawCenteredString(g, "GAME OVER", 800, 260);
+		drawCentered(g, "MISSION FAILED", 800, 270);
 
-		g.setFont(new Font("Arial", Font.PLAIN, 20));
+		g.setFont(new Font("Arial", Font.PLAIN, 18));
 		g.setColor(Color.WHITE);
-		drawCenteredString(g, "Press ENTER to Restart", 800, 340);
+		drawCentered(g, "PRESS ENTER TO CONTINUE", 800, 350);
 	}
 
 	private void drawWin(Graphics g) {
-		g.setColor(new Color(0, 0, 0, 180));
+		g.setColor(new Color(0, 0, 0, 200));
 		g.fillRect(0, 0, 800, 600);
 
 		g.setFont(new Font("Arial", Font.BOLD, 56));
 		g.setColor(Color.YELLOW);
-		drawCenteredString(g, "MISSION COMPLETE", 800, 260);
+		drawCentered(g, "MISSION COMPLETE!", 800, 250);
 
-		g.setFont(new Font("Arial", Font.BOLD, 24));
+		g.setFont(new Font("Arial", Font.BOLD, 22));
 		g.setColor(Color.WHITE);
-		drawCenteredString(g, "Congratulations! You Win!", 800, 320);
+		drawCentered(g, "ALL CLEAR — CONGRATULATIONS!", 800, 310);
 
-		g.setFont(new Font("Arial", Font.PLAIN, 18));
+		g.setFont(new Font("Arial", Font.PLAIN, 16));
 		g.setColor(Color.CYAN);
-		drawCenteredString(g, "Press ENTER to Play Again", 800, 380);
+		drawCentered(g, "PRESS ENTER TO PLAY AGAIN", 800, 380);
 	}
 
 	private void drawLevelClear(Graphics g) {
-		g.setColor(new Color(0, 0, 0, 150));
+		g.setColor(new Color(0, 0, 0, 160));
 		g.fillRect(0, 0, 800, 600);
 
-		g.setFont(new Font("Arial", Font.BOLD, 48));
+		g.setFont(new Font("Arial", Font.BOLD, 44));
 		g.setColor(Color.GREEN);
-		drawCenteredString(g, "LEVEL CLEAR!", 800, 280);
+		drawCentered(g, "STAGE CLEAR!", 800, 280);
 	}
 
-	private void drawCenteredString(Graphics g, String str, int w, int y) {
+	private void drawCentered(Graphics g, String str, int w, int y) {
 		int sw = g.getFontMetrics().stringWidth(str);
 		g.drawString(str, (w - sw) / 2, y);
 	}
@@ -243,11 +240,7 @@ public class GameMainJPanel extends JPanel implements Runnable {
 	public void run() {
 		while (true) {
 			this.repaint();
-			try {
-				Thread.sleep(16); // ~60 FPS
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
+			try { Thread.sleep(16); } catch (InterruptedException e) { e.printStackTrace(); }
 		}
 	}
 }

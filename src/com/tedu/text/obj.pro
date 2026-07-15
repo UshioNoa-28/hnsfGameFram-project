@@ -7,3 +7,5 @@ barrier=com.tedu.element.Barrier
 item=com.tedu.element.ItemDrop
 background=com.tedu.element.Background
 boss=com.tedu.element.Boss
+hostage=com.tedu.element.Hostage
+aircraft=com.tedu.element.Aircraft
